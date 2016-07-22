@@ -9,6 +9,8 @@ import javax.annotation.processing.*;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.util.Types;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.tools.Diagnostic;
@@ -39,14 +41,39 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
         super.init(processingEnv);
     }
 
+    private Types typeUtils() {
+        return processingEnv.getTypeUtils();
+    }
+
+    private ElementTypePair getType(String className) {
+        TypeElement typeElement = processingEnv.getElementUtils().getTypeElement(className);
+        DeclaredType declaredType = typeUtils().getDeclaredType(typeElement);
+        return new ElementTypePair(typeElement, declaredType);
+    }
+
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        Map<Type, TypeElement> finded = new HashMap<>();
+        Map<Element, TypeElement> finded = new HashMap<>();
         if (!roundEnv.processingOver()) {
             for (TypeElement annotation : annotations) {
+                System.out.println("TypeElement: "+ annotation.getSimpleName());
+
+
+
                 for (Element e : roundEnv.getElementsAnnotatedWith(annotation)) {
-                    if (e.getClass().getAnnotation(Entity.class) != null){
-                        finded.putIfAbsent(e.getClass(), annotation);
+
+                    ObjectAdminEntity tagAnnotation = e.getAnnotation(ObjectAdminEntity.class);
+
+
+                    System.out.println("Element: " + e.getSimpleName());
+                    System.out.println("EnclosingElement: " + e.getEnclosingElement().getClass().getName());
+                    if (e.getAnnotation(Entity.class) != null){
+                        finded.putIfAbsent(e, annotation);
+
+//                        for(Field field : e.
+//                            System.out.println("1.Field:" + field.getName());
+//                        }
+
                     }
                 }
             }
@@ -55,15 +82,21 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
         return false;
     }
 
-    private void build(Map<Type, TypeElement> finded) {
+    private void build(Map<Element, TypeElement> finded) {
         finded.forEach((type, element) -> {
             try {
-                String name = String.format("%sRepository", type.getClass().getName());
+                String name = String.format("%sRepository", type.getSimpleName());
                 Type idType = null;
 
-                for(Field field : type.getClass().getDeclaredFields()){
-                    Annotation idAnnotation = field.getAnnotation(Id.class);
-                    if (idAnnotation != null){
+                for(Field field : element.getClass().getFields()){
+                    System.out.println("1.Field:" + field.getName());
+                }
+
+                System.out.println("");
+                for(Field field : type.getClass().getFields()){
+                    System.out.println("Field:" + field.getName());
+                    if (field.getAnnotationsByType(Id.class).length > 0){
+                        System.out.println("Found");
                         idType = field.getType();
                         break;
                     }
@@ -86,7 +119,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
 
                 TypeSpec typeSpec = TypeSpec.interfaceBuilder(name)
                         .addModifiers(Modifier.PUBLIC)
-                        .addSuperinterface(ParameterizedTypeName.get(CrudRepository.class, type, idType))
+                        .addSuperinterface(ParameterizedTypeName.get(CrudRepository.class, type.getClass(), idType))
                         .build();
 
                 JavaFile javaFile = JavaFile.builder("ru.ogres.tools.repo", typeSpec)
@@ -101,4 +134,15 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
 
     }
 
+}
+
+
+class ElementTypePair {
+    public ElementTypePair(TypeElement element, DeclaredType type) {
+        this.element = element;
+        this.type = type;
+    }
+
+    final TypeElement element;
+    final DeclaredType type;
 }
