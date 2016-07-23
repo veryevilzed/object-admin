@@ -1,8 +1,6 @@
 package ru.ogres.tools;
 
-import com.squareup.javapoet.JavaFile;
-import com.squareup.javapoet.ParameterizedTypeName;
-import com.squareup.javapoet.TypeSpec;
+import com.squareup.javapoet.*;
 import org.springframework.data.repository.CrudRepository;
 
 import javax.annotation.processing.*;
@@ -11,6 +9,7 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Types;
 import javax.persistence.Entity;
@@ -36,6 +35,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
     Filer filer;
     Messager messager;
     private ElementTypePair objectAdminEntityType;
+
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
@@ -67,61 +67,45 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
         // technically, we don't need to filter here, but it gives us a free cast
         for (TypeElement typeElement : ElementFilter.typesIn(entityAnnotated)) {
             System.out.println("Element: " + typeElement.getSimpleName());
+
+            TypeMirror keyType = null;
+            String keyName = null;
+
             for (VariableElement variableElement : ElementFilter.fieldsIn(typeElement.getEnclosedElements())) {
                 System.out.println("Field: " + variableElement.getSimpleName());
+                if ( variableElement.getAnnotation(Id.class) != null){
+                    keyName = variableElement.getSimpleName().toString();
+                    keyType = variableElement.asType();
+                    System.out.println(" Name: " + keyName + " Type:" + keyType.toString());
+                }
             }
+
+            if (keyName == null)
+                messager.printMessage(Diagnostic.Kind.ERROR, "@Id field not found");
+            build(typeElement, keyType, keyName);
         }
     }
 
 
-    private void build(Map<Element, TypeElement> finded) {
-        finded.forEach((type, element) -> {
-            try {
-                String name = String.format("%sRepository", type.getSimpleName());
-                Type idType = null;
+    private void build(TypeElement typeElement, TypeMirror keyType, String keyName) {
 
-                for(Field field : element.getClass().getFields()){
-                    System.out.println("1.Field:" + field.getName());
-                }
+        try{
+            String name = typeElement.getSimpleName() + "Repository";
 
-                System.out.println("");
-                for(Field field : type.getClass().getFields()){
-                    System.out.println("Field:" + field.getName());
-                    if (field.getAnnotationsByType(Id.class).length > 0){
-                        System.out.println("Found");
-                        idType = field.getType();
-                        break;
-                    }
-                }
+            TypeSpec typeSpec = TypeSpec.interfaceBuilder(name)
+                    .addModifiers(Modifier.PUBLIC)
+                    .addSuperinterface(ParameterizedTypeName.get(ClassName.get(CrudRepository.class),
+                            TypeName.get(typeElement.asType()),
+                            TypeName.get(keyType)))
+                    .build();
 
-                if (idType == null)
-                    for(Method method : type.getClass().getMethods()){
-                        Annotation idAnnotation = method.getAnnotation(Id.class);
-                        if (idAnnotation != null && method.getName().startsWith("get")){
-                            idType = method.getReturnType();
-                            break;
-                        }
-                    }
+            JavaFile javaFile = JavaFile.builder("ru.ogres.tools.repo", typeSpec)
+                    .build();
+            javaFile.writeTo(filer);
+        }catch (IOException e){
+            messager.printMessage(Diagnostic.Kind.ERROR, e.getMessage());
+        }
 
-                if (idType == null){
-                    messager.printMessage(Diagnostic.Kind.ERROR, name +" not found @Id annotation");
-                    return;
-                }
-
-
-                TypeSpec typeSpec = TypeSpec.interfaceBuilder(name)
-                        .addModifiers(Modifier.PUBLIC)
-                        .addSuperinterface(ParameterizedTypeName.get(CrudRepository.class, type.getClass(), idType))
-                        .build();
-
-                JavaFile javaFile = JavaFile.builder("ru.ogres.tools.repo", typeSpec)
-                        .build();
-                javaFile.writeTo(filer);
-                messager.printMessage(Diagnostic.Kind.NOTE, String.format("Entity Repo %s builded.", name));
-            }catch (IOException e){
-                messager.printMessage(Diagnostic.Kind.ERROR, e.getMessage());
-            }
-        });
 
 
     }
@@ -129,12 +113,3 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
 }
 
 
-class ElementTypePair {
-    public ElementTypePair(TypeElement element, DeclaredType type) {
-        this.element = element;
-        this.type = type;
-    }
-
-    final TypeElement element;
-    final DeclaredType type;
-}
