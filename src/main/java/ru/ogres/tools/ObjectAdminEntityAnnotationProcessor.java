@@ -9,7 +9,9 @@ import javax.annotation.processing.*;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Types;
 import javax.persistence.Entity;
 import javax.persistence.Id;
@@ -33,12 +35,14 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
 
     Filer filer;
     Messager messager;
+    private ElementTypePair objectAdminEntityType;
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
+        super.init(processingEnv);
         this.filer = processingEnv.getFiler();
         this.messager = processingEnv.getMessager();
-        super.init(processingEnv);
+        this.objectAdminEntityType = getType(OAE_TYPE);
     }
 
     private Types typeUtils() {
@@ -53,34 +57,22 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        Map<Element, TypeElement> finded = new HashMap<>();
-        if (!roundEnv.processingOver()) {
-            for (TypeElement annotation : annotations) {
-                System.out.println("TypeElement: "+ annotation.getSimpleName());
-
-
-
-                for (Element e : roundEnv.getElementsAnnotatedWith(annotation)) {
-
-                    ObjectAdminEntity tagAnnotation = e.getAnnotation(ObjectAdminEntity.class);
-
-
-                    System.out.println("Element: " + e.getSimpleName());
-                    System.out.println("EnclosingElement: " + e.getEnclosingElement().getClass().getName());
-                    if (e.getAnnotation(Entity.class) != null){
-                        finded.putIfAbsent(e, annotation);
-
-//                        for(Field field : e.
-//                            System.out.println("1.Field:" + field.getName());
-//                        }
-
-                    }
-                }
-            }
-        }
-        build(finded);
+        checkObjectAdminEntityAnnotatedElement(roundEnv);
         return false;
     }
+
+    private void checkObjectAdminEntityAnnotatedElement(RoundEnvironment roundEnv){
+        Set<? extends Element> entityAnnotated =
+                roundEnv.getElementsAnnotatedWith(objectAdminEntityType.element);
+        // technically, we don't need to filter here, but it gives us a free cast
+        for (TypeElement typeElement : ElementFilter.typesIn(entityAnnotated)) {
+            System.out.println("Element: " + typeElement.getSimpleName());
+            for (VariableElement variableElement : ElementFilter.fieldsIn(typeElement.getEnclosedElements())) {
+                System.out.println("Field: " + variableElement.getSimpleName());
+            }
+        }
+    }
+
 
     private void build(Map<Element, TypeElement> finded) {
         finded.forEach((type, element) -> {
