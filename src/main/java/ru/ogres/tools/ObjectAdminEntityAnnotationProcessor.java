@@ -122,7 +122,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                 .addAnnotation(Controller.class)
                 .addAnnotation(
                         AnnotationSpec.builder(RequestMapping.class)
-                                .addMember("path", "$S", "${objectadmin.url:/admin}/" + typeElement.getSimpleName().toString())
+                                .addMember("path", "$S", "${object-admin.url:/admin/rest}/" + typeElement.getSimpleName().toString())
                                 .build()
                 )
 
@@ -152,7 +152,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                                 .addAnnotation(ResponseBody.class)
                                 .addAnnotation(
                                         AnnotationSpec.builder(RequestMapping.class)
-                                                .addMember("path", "$S", "{id}")
+                                                .addMember("path", "$S", "${object-admin.url:/admin/rest}/{id}")
                                                 .build()
                                 )
                                 .addParameter(
@@ -164,7 +164,11 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                                                 )
                                         .build()
                                 )
-                                .addCode("return repo.findOne(id);\n")
+                                .addCode("try{\n" +
+                                        "   return repo.findOne(id);\n" +
+                                        "} catch() {\n" +
+                                            "throw new ResourceNotFoundException();\n" +
+                                        "}\n")
                                 .returns( ClassName.get(typeElement) )
                         .build()
                 )
