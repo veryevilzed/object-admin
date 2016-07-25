@@ -5,6 +5,7 @@ import com.squareup.javapoet.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -121,7 +122,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                 .addAnnotation(Controller.class)
                 .addAnnotation(
                         AnnotationSpec.builder(RequestMapping.class)
-                                .addMember("path", "$S", "/" + typeElement.getSimpleName().toString())
+                                .addMember("path", "$S", "${objectadmin.url:/admin}/" + typeElement.getSimpleName().toString())
                                 .build()
                 )
 
@@ -143,6 +144,28 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                         .addCode("List<$T> res = new $T<>();\n" +
                                 "repo.findAll().forEach(res::add);\n" +
                                 "return res;\n", typeElement, ArrayList.class)
+                        .build()
+                )
+                .addMethod(
+                        MethodSpec.methodBuilder("single")
+                                .addModifiers(Modifier.PUBLIC)
+                                .addAnnotation(ResponseBody.class)
+                                .addAnnotation(
+                                        AnnotationSpec.builder(RequestMapping.class)
+                                                .addMember("path", "$S", "{id}")
+                                                .build()
+                                )
+                                .addParameter(
+                                        ParameterSpec.builder(Long.class, "id")
+                                                .addAnnotation(
+                                                    AnnotationSpec.builder(PathVariable.class)
+                                                        .addMember("required", "$L", "false")
+                                                        .build()
+                                                )
+                                        .build()
+                                )
+                                .addCode("return repo.findOne(id);\n")
+                                .returns( ClassName.get(typeElement) )
                         .build()
                 )
                 .build();
