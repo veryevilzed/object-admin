@@ -21,6 +21,7 @@ import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -60,6 +61,8 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
         return false;
     }
 
+
+
     private void checkObjectAdminEntityAnnotatedElement(RoundEnvironment roundEnv){
         Set<? extends Element> entityAnnotated =
                 roundEnv.getElementsAnnotatedWith(objectAdminEntityType.element);
@@ -69,8 +72,22 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
 
             TypeMirror keyType = null;
             String keyName = null;
-
+            Set<Field> fields = new HashSet<>();
             for (VariableElement variableElement : ElementFilter.fieldsIn(typeElement.getEnclosedElements())) {
+                Field f = new Field();
+                ObjectAdminField objectAdminField = variableElement.getAnnotation(ObjectAdminField.class);
+                f.field = variableElement.getSimpleName().toString();
+                if (objectAdminField != null) {
+                    f.name = objectAdminField.name().equals("") ? variableElement.getSimpleName().toString() : objectAdminField.name();
+                    f.type = objectAdminField.type().equals("") ? variableElement.asType().toString() : objectAdminField.type();
+                    f.description = objectAdminField.description();
+                    f.index = objectAdminField.index();
+                }else {
+                    f.name = variableElement.getSimpleName().toString();
+                    f.type = variableElement.asType().toString();
+                }
+                fields.add(f);
+
                 System.out.println("Field: " + variableElement.getSimpleName());
                 if (variableElement.getAnnotation(ObjectAdminId.class) != null) {
                     keyName = variableElement.getSimpleName().toString();
@@ -83,7 +100,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                 messager.printMessage(Diagnostic.Kind.ERROR, "@Id field not found");
             try {
                 TypeSpec repository = buildRepository(typeElement, keyType, keyName);
-                buildWebHandler(typeElement, keyType, keyName, repository);
+                buildWebHandler(typeElement, keyType, keyName, repository, fields);
             }catch (Exception e){
                 messager.printMessage(Diagnostic.Kind.ERROR, e.getMessage());
             }
@@ -109,7 +126,9 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
             return typeSpec;
     }
 
-    private void buildWebHandler(TypeElement typeElement, TypeMirror keyType, String keyName, TypeSpec repository) throws IOException {
+
+
+    private void buildWebHandler(TypeElement typeElement, TypeMirror keyType, String keyName, TypeSpec repository, Set<Field> fields) throws IOException {
         if (repository == null)
             return;
 
@@ -202,10 +221,14 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                                         )
                                         .build()
                         )
-                                .addParameter(ModelMap.class, "map", Modifier.FINAL)
+                        .addParameter(ModelMap.class, "map", Modifier.FINAL)
                         .returns(String.class)
-                        .addCode("map.put($S, $L);"+
-                                 "return templatePrefix+$S;\n", "oa_static", "staticPath", "base")
+                        //.addCode(Field.build(fields))
+                        .addCode(Table.build(typeElement, fields))
+                        //.addCode("map.put($S, $L);\n", "fields", "fields")
+                        //.addCode("map.put($S, repo.findAll());\n", "data")
+                        .addCode("map.put($S, $L);\n"+
+                                 "return templatePrefix+$S;\n", "oa_static", "staticPath", "index")
                         .build()
                 )
                 .addMethod(
