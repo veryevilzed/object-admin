@@ -29,13 +29,13 @@ public class Table  {
         code.add("$T table = new $T();\n", Table.class, Table.class);
         code.add("table.fields = new $T[]{\n", Field.class);
         for(int i=0;i<list.size();i++){
-            code.add("$L", Field.buildField(list.get(i)));
-            if (i<list.size()-1) code.add(", ");
+            code.add("  $L", Field.buildField(list.get(i)));
+            if (i<list.size()-1) code.add(", \n");
         }
-        code.add("}\n");
+        code.add("\n};\n");
 
         code.add("for($T item : repo.findAll()) {\n", typeElement);
-        code.add("table.data.add(new $T[] {", Object.class);
+        code.add("  table.data.add(new $T[] {", Object.class);
         for(int i=0;i<list.size();i++){
             code.add("item.get$L()", StringUtils.capitalize(list.get(i).field));
             if (i<list.size()-1) code.add(", ");
