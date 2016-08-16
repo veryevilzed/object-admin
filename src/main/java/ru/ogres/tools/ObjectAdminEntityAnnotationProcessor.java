@@ -65,7 +65,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
     private void checkObjectAdminEntityAnnotatedElement(RoundEnvironment roundEnv){
         Set<? extends Element> entityAnnotated =
                 roundEnv.getElementsAnnotatedWith(objectAdminEntityType.element);
-        // technically, we don't need to filter here, but it gives us a free cast
+
         for (TypeElement typeElement : ElementFilter.typesIn(entityAnnotated)) {
             System.out.println("Element: " + typeElement.getSimpleName());
 
