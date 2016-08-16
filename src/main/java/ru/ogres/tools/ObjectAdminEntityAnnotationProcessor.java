@@ -211,7 +211,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                                         .addMember("method", "$T.GET", RequestMethod.class)
                                         .build()
                         ).addParameter(
-                                ParameterSpec.builder(Integer.class, "page")
+                                ParameterSpec.builder(Integer.class, "p")
                                         .addAnnotation(
                                                 AnnotationSpec.builder(RequestParam.class)
                                                         .addMember("name", "$S", "page")
@@ -224,7 +224,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                         .addParameter(ModelMap.class, "map", Modifier.FINAL)
                         .returns(String.class)
                         //.addCode(Field.build(fields))
-                        .addCode(Table.build(typeElement, fields))
+                        .addCode(Table.build(typeElement, fields, "p", "defaultPageSize"))
                         //.addCode("map.put($S, $L);\n", "fields", "fields")
                         //.addCode("map.put($S, repo.findAll());\n", "data")
                         .addCode("map.put($S, $L);\n"+
