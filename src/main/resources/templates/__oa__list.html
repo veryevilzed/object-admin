@@ -1,0 +1,56 @@
+{% extends "__oa__base" %}
+
+{% block content %}
+<h1 class="page-header">{{ table.name }}</h1>
+
+{% if table.totalPages > 0 %}
+<div class="btn-group">
+    {% for field in table.range %}
+    {% if field == table.number %}
+    <span class="btn btn-primary">{{ field }}</span>
+    {% else %}
+    <a class="btn btn-default" href="?page={{ field }}">{{ field }}</a>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+        <tr>
+        {% for field in table.fields %}
+            <th>{{ field.name }}</th>
+        {% endfor %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for row in table.data %}
+        <tr>
+            {% for col in row %}
+            <td>{{ col }}</td>
+            {% endfor %}
+            <td><a href="{{ current_path }}/{{ row[0] }}" class="btn btn-info"><span class="glyphicon glyphicon-pencil"></span></a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if table.totalPages > 0 %}
+<div class="btn-group">
+    {% for field in table.range %}
+    {% if field == table.number %}
+    <span class="btn btn-primary">{{ field }}</span>
+    {% else %}
+    <a class="btn btn-default" href="?page={{ field }}">{{ field }}</a>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<div>Page count: {{ table.totalPages }} Object count: {{ table.totalElements }}</div>
+
+{% endblock %}
+

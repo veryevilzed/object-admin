@@ -8,20 +8,20 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.PagingAndSortingRepository;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.processing.*;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.VariableElement;
+import javax.lang.model.element.*;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -67,9 +67,20 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
         Set<? extends Element> entityAnnotated =
                 roundEnv.getElementsAnnotatedWith(objectAdminEntityType.element);
 
+        List<Data> objectData = new ArrayList<>();
+
+        for (TypeElement typeElement : ElementFilter.typesIn(entityAnnotated)) {
+            ObjectAdminEntity objectAdminEntity = typeElement.getAnnotation(ObjectAdminEntity.class);
+            if (objectAdminEntity == null || objectAdminEntity.hidden())
+                continue;
+            objectData.add(new Data(objectAdminEntity.name().equals("") ?  typeElement.getSimpleName().toString() : objectAdminEntity.name(),  typeElement.getSimpleName().toString()));
+        }
+
         for (TypeElement typeElement : ElementFilter.typesIn(entityAnnotated)) {
             System.out.println("Element: " + typeElement.getSimpleName());
-
+            ObjectAdminEntity objectAdminEntity = typeElement.getAnnotation(ObjectAdminEntity.class);
+            if (objectAdminEntity == null)
+                continue;
             TypeMirror keyType = null;
             String keyName = null;
             Set<Field> fields = new HashSet<>();
@@ -99,10 +110,13 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
             if (keyName == null)
                 messager.printMessage(Diagnostic.Kind.ERROR, "@Id field not found");
             try {
-                TypeSpec repository = buildRepository(typeElement, keyType, keyName);
-                buildWebHandler(typeElement, keyType, keyName, repository, fields);
-            }catch (Exception e){
+                TypeSpec repository = null;
+                if (objectAdminEntity.createRepositoryAutomaticaly())
+                    repository = buildRepository(typeElement, keyType, keyName);
+                buildWebHandler(objectAdminEntity, typeElement, keyType, keyName, repository, fields, objectData);
+            }catch (IOException e){
                 messager.printMessage(Diagnostic.Kind.ERROR, e.getMessage());
+
             }
         }
     }
@@ -127,15 +141,27 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
     }
 
 
+    private void buildWebHandler(ObjectAdminEntity objectAdminEntity, TypeElement typeElement, TypeMirror keyType, String keyName, TypeSpec repository, Set<Field> fields, List<Data> objectData) throws IOException {
+        FieldSpec repositoryField;
 
-    private void buildWebHandler(TypeElement typeElement, TypeMirror keyType, String keyName, TypeSpec repository, Set<Field> fields) throws IOException {
-        if (repository == null)
-            return;
+        if (repository == null) {
+            repositoryField = FieldSpec.builder(
+                    ParameterizedTypeName.get(ClassName.get(ObjectAdminRepository.class),
+                            TypeName.get(typeElement.asType()),
+                            TypeName.get(keyType)), "repo", Modifier.PUBLIC)
+                    .addAnnotation(Autowired.class)
+                    .build();
+        }else{
+            repositoryField = FieldSpec.builder(TypeVariableName.get(repository.name), "repo", Modifier.PUBLIC)
+                    .addAnnotation(Autowired.class)
+                    .build();
+        }
 
         String name = typeElement.getSimpleName() + "WebHandler";
 
 
-        TypeSpec.Builder b = repository.toBuilder();
+
+
 
         TypeSpec typeSpec = TypeSpec.classBuilder(name)
                 .addModifiers(Modifier.PUBLIC)
@@ -145,10 +171,14 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                                 .addMember("path", "$S", "${object-admin.url:/admin/rest}/" + typeElement.getSimpleName().toString())
                                 .build()
                 )
-
+                .addField(repositoryField)
                 .addField(
-                        FieldSpec.builder(TypeVariableName.get(repository.name), "repo", Modifier.PUBLIC)
-                                .addAnnotation(Autowired.class)
+                        FieldSpec.builder(String.class, "adminPath", Modifier.PUBLIC)
+                                .addAnnotation(
+                                        AnnotationSpec.builder(Value.class)
+                                                .addMember("value", "$S", "${object-admin.url:/admin/rest}/")
+                                                .build()
+                                )
                                 .build()
                 )
                 .addField(
@@ -178,30 +208,15 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                                 )
                                 .build()
                 )
-//                .addMethod(
-//                        MethodSpec.methodBuilder("list")
-//                        .addModifiers(Modifier.PUBLIC)
-//                        .addAnnotation(ResponseBody.class)
-//                        .addAnnotation(
-//                                AnnotationSpec.builder(RequestMapping.class)
-//                                        .addMember("path", "$S", "")
-//                                        .addMember("method", "$T.GET", RequestMethod.class)
-//                                        .build()
-//                        ).addParameter(
-//                                ParameterSpec.builder(Integer.class, "page")
-//                                        .addAnnotation(
-//                                                AnnotationSpec.builder(RequestParam.class)
-//                                                        .addMember("name", "$S", "page")
-//                                                        .addMember("required", "$L", "false")
-//                                                        .addMember("defaultValue", "$S", "0")
-//                                                        .build()
-//                                        )
-//                                        .build()
-//                        )
-//                        .returns( ParameterizedTypeName.get(ClassName.get("org.springframework.data.domain", "Page"), ClassName.get(typeElement) ))
-//                        .addCode("return repo.findAll(new $T(page,defaultPageSize));", PageRequest.class)
-//                        .build()
-//                )
+                .addField(
+                        FieldSpec.builder(String.class, "schemasPath", Modifier.PUBLIC)
+                                .addAnnotation(
+                                        AnnotationSpec.builder(Value.class)
+                                                .addMember("value", "$S", "${object-admin.schemas-path:/__oa__schemas}")
+                                                .build()
+                                )
+                                .build()
+                )
                 .addMethod(
                         MethodSpec.methodBuilder("list")
                         .addModifiers(Modifier.PUBLIC)
@@ -223,13 +238,56 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                         )
                         .addParameter(ModelMap.class, "map", Modifier.FINAL)
                         .returns(String.class)
-                        //.addCode(Field.build(fields))
-                        .addCode(Table.build(typeElement, fields, "p", "defaultPageSize"))
-                        //.addCode("map.put($S, $L);\n", "fields", "fields")
-                        //.addCode("map.put($S, repo.findAll());\n", "data")
+                        .addCode(Tools.buildTable(objectAdminEntity.name().equals("") ?  typeElement.getSimpleName().toString() : objectAdminEntity.name(), typeElement, fields, "p", "defaultPageSize"))
+                        .addCode("map.put($S, adminPath+$S);", "current_path", typeElement.getSimpleName().toString())
                         .addCode("map.put($S, $L);\n"+
-                                 "return templatePrefix+$S;\n", "oa_static", "staticPath", "index")
+                                 "return templatePrefix+$S;\n", "oa_static", "staticPath", "list")
                         .build()
+                )
+
+                .addMethod(
+                        MethodSpec.methodBuilder("detail")
+                                .addModifiers(Modifier.PUBLIC)
+                                .addAnnotation(
+                                        AnnotationSpec.builder(RequestMapping.class)
+                                                .addMember("path", "$S", "/{id}")
+                                                .addMember("method", "$T.GET", RequestMethod.class)
+                                                .build()
+                                )
+                                .addParameter(
+                                        ParameterSpec.builder(ClassName.get(keyType), "id")
+                                                .addAnnotation(
+                                                        AnnotationSpec.builder(PathVariable.class)
+                                                                .build()
+                                                )
+                                                .build()
+                                )
+                                .addParameter(ModelMap.class, "map", Modifier.FINAL)
+                                .returns(String.class)
+                                .addCode("map.put($S, adminPath+$S+$S+$L);", "current_path", typeElement.getSimpleName().toString(), "/", "id")
+                                .addCode("map.put($S, repo.findOne($L));", "object", "id")
+                                .addCode("map.put($S, $S);", "object_name", objectAdminEntity.name().equals("") ?  typeElement.getSimpleName().toString() : objectAdminEntity.name())
+                                .addCode("map.put($S, adminPath+$S);", "back", typeElement.getSimpleName().toString())
+                                .addCode("map.put($S, schemasPath+$S+$S);", "schema_url", "/", objectAdminEntity.schema().equals("") ? StringUtils.uncapitalize(typeElement.getSimpleName().toString())+".json" : objectAdminEntity.schema())
+                                .addCode("map.put($S, adminPath+$S+$S);", "insert_url", typeElement.getSimpleName().toString(), "/api")
+                                .addCode("map.put($S, adminPath+$S+$S+$L);", "update_url", typeElement.getSimpleName().toString(), "/api/", "id")
+                                .addCode("map.put($S, $L);\n"+
+                                        "return templatePrefix+$S;\n", "oa_static", "staticPath", "detail")
+                                .build()
+                )
+                .addMethod(
+                        MethodSpec.methodBuilder("schemas")
+                                .addModifiers(Modifier.PUBLIC)
+                                .addAnnotation(ResponseBody.class)
+                                .addAnnotation(
+                                        AnnotationSpec.builder(RequestMapping.class)
+                                                .addMember("path", "$S", "/schema.json")
+                                                .addMember("method", "$T.GET", RequestMethod.class)
+                                                .build()
+                                )
+                                .addCode("return $S;\n", "")
+                                .returns( String.class )
+                                .build()
                 )
                 .addMethod(
                         MethodSpec.methodBuilder("singleGet")
@@ -237,7 +295,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                                 .addAnnotation(ResponseBody.class)
                                 .addAnnotation(
                                         AnnotationSpec.builder(RequestMapping.class)
-                                                .addMember("path", "$S", "/{id}")
+                                                .addMember("path", "$S", "/api/{id}")
                                                 .addMember("method", "$T.GET", RequestMethod.class)
                                                 .build()
                                 )
@@ -258,7 +316,7 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                                 .addAnnotation(ResponseBody.class)
                                 .addAnnotation(
                                         AnnotationSpec.builder(RequestMapping.class)
-                                                .addMember("path", "$S", "")
+                                                .addMember("path", "$S", "/api")
                                                 .addMember("method", "{$T.POST, $T.PUT}", RequestMethod.class, RequestMethod.class)
                                                 .build()
                                 )
@@ -281,12 +339,12 @@ public class ObjectAdminEntityAnnotationProcessor extends AbstractProcessor {
                                 .addAnnotation(ResponseBody.class)
                                 .addAnnotation(
                                         AnnotationSpec.builder(RequestMapping.class)
-                                                .addMember("path", "$S", "/{id}")
+                                                .addMember("path", "$S", "/api/{id}")
                                                 .addMember("method", "$T.DELETE", RequestMethod.class)
                                                 .build()
                                 )
                                 .addParameter(
-                                        ParameterSpec.builder(ClassName.get(typeElement), "id")
+                                        ParameterSpec.builder(ClassName.get(keyType), "id")
                                                 .addAnnotation(
                                                         AnnotationSpec.builder(PathVariable.class)
                                                                 .build()

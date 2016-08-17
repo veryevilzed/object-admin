@@ -11,4 +11,8 @@ import java.lang.annotation.Target;
 @Target({ElementType.TYPE})
 @Retention(RetentionPolicy.SOURCE)
 public @interface ObjectAdminEntity {
+    String name() default "";
+    boolean createRepositoryAutomaticaly() default true;
+    String schema() default "";
+    boolean hidden() default false;
 }

@@ -1,0 +1,59 @@
+{% extends "__oa__base" %}
+
+{% block content %}
+<h1 class="page-header">Detail of {{ object.id }}</h1>
+<a class="btn btn-info" href="{{ back }}">Back</a>
+
+<div>
+
+<div id='editor_holder'></div>
+<button id='submit' class="btn btn-primary">Submit</button>
+
+</div>
+
+{% endblock %}
+
+
+{% block scripts_top %}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qwest/4.4.5/qwest.min.js"></script>
+<script src="{{ oa_static }}/js/jsoneditor.min.js"></script>
+
+<script>
+    // Set the default CSS theme and icon library globally
+    JSONEditor.defaults.theme = 'bootstrap3';
+    JSONEditor.defaults.iconlib = 'bootstrap3';
+</script>
+{% endblock %}
+
+
+
+{% block scripts_bottom %}
+<script>
+
+    var editor = null;
+    qwest.get('{{ schema_url }}')
+            .then(function(xhr, response) {
+                editor = new JSONEditor(document.getElementById('editor_holder'),{
+                    schema: response
+                });
+
+                qwest.get('{{ update_url }}').then(function(xhr, response) {
+                    editor.setValue(response);
+                });
+
+            });
+    //editor.getValue())
+    // Hook up the submit button to log to the console
+    document.getElementById('submit').addEventListener('click',function() {
+        console.log(editor.getValue());
+
+        qwest.post("/test/", editor.getValue(), {dataType: "json"}).then(function(xhr, response) {
+            console.log("OUT:", JSON.parse(response));
+            var data = JSON.parse(response);
+            editor.setValue(data);
+        });
+    });
+
+</script>
+{% endblock %}

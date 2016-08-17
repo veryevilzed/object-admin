@@ -72,7 +72,8 @@ public class Field {
 
     public Field() {}
 
-    public Field(String name, String type, String description, Integer index) {
+    public Field(String field, String name, String type, String description, Integer index) {
+        this.field = field;
         this.name = name;
         this.type = type;
         this.description = description;
@@ -86,19 +87,5 @@ public class Field {
         return list.stream().sorted((f1, f2) -> Integer.compare(f1.index,f2.index)).collect(Collectors.toList());
     }
 
-    public static CodeBlock buildField(Field i) {
-        CodeBlock.Builder code = CodeBlock.builder();
-        code.add("new $T($S, $S, $S, $L)", Field.class, i.name, i.type, i.description, i.index);
-        return code.build();
-    }
-
-    public static CodeBlock build(Iterable<Field> fields) {
-
-        CodeBlock.Builder code = CodeBlock.builder();
-        code.add("$T<$T> fields = new $T<>();\n", List.class, Field.class, ArrayList.class);
-        sorted(fields).forEach((i) -> code.add("fields.add($L);\n", buildField(i)));
-
-        return code.build();
-    }
 
 }

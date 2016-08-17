@@ -20,8 +20,16 @@ public class ObjectAdminStaticConfig extends WebMvcConfigurerAdapter {
     @Value("${object-admin.static-path:/__oa__static}")
     String staticPath;
 
+    @Value("${object-admin.schemas-path:/__oa__schemas}")
+    String schemasPath;
+
+    @Value("${object-admin.schemas-location:classpath:/schemas/}")
+    String schemasLocation;
+
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler(staticPath + "/**").addResourceLocations(CLASSPATH_RESOURCE_LOCATIONS);
+        registry.addResourceHandler(schemasPath + "/**").addResourceLocations(schemasLocation);
     }
 }
